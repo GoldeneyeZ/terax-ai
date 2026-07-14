@@ -43,7 +43,11 @@ reqwest = { version = "0.12", default-features = false, features = [
 	"stream",
 ] }
 bytes = "1"
+base64 = "0.22"
 futures-util = "0.3"
+getrandom = "0.3"
+sha2 = "0.10"
+subtle = "2.6"
 tokio = { version = "1", default-features = false, features = ["rt"] }
 tempfile = "3"
 notify = "8.2.0"
