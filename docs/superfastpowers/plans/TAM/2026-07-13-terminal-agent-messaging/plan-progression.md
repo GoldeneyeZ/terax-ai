@@ -1,6 +1,6 @@
 # Plan Progression
 
-Last updated: 2026-07-14 12:49
+Last updated: 2026-07-14 12:54
 
 ## Execution Policy
 
@@ -17,59 +17,59 @@ Last updated: 2026-07-14 12:49
 - Implementation: complete
 - Spec review: checked
 - Code quality: checked-with-minor-notes
-- Integration review: unchecked
-- Next action: Perform plan-wide integration review.
+- Integration review: checked
+- Next action: Goal complete.
 
 ## Task 1: Persist stable terminal identities
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-1/`
-- Status: implemented
-- Next action: Await plan-scoped reviews after all tasks are implemented.
+- Status: complete
+- Next action: Complete.
 
 ## Task 2: Build protocol, directory, credentials, and limits
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-2/`
-- Status: implemented
-- Next action: Await plan-scoped reviews after all tasks are implemented.
+- Status: complete
+- Next action: Complete.
 
 ## Task 3: Add bounded Windows named-pipe transport
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-3/`
-- Status: implemented
-- Next action: Await plan-scoped reviews after all tasks are implemented.
+- Status: complete
+- Next action: Complete.
 
 ## Task 4: Route requests through Rust control service
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-4/`
-- Status: implemented
-- Next action: Await plan-scoped reviews after all tasks are implemented.
+- Status: complete
+- Next action: Complete.
 
 ## Task 5: Synchronize frontend catalog and durable name changes
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-5/`
-- Status: implemented
-- Next action: Await plan-scoped reviews after all tasks are implemented.
+- Status: complete
+- Next action: Complete.
 
 ## Task 6: Bind pane identity, credentials, and PTY lifecycle
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-6/`
-- Status: implemented
-- Next action: Await plan-scoped reviews after all tasks are implemented.
+- Status: complete
+- Next action: Complete.
 
 ## Task 7: Add `teraxctl.exe` and Windows sidecar packaging
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-7/`
-- Status: implemented
-- Next action: Await plan-scoped reviews after all tasks are implemented.
+- Status: complete
+- Next action: Complete.
 
 ## Task 8: Prove security, concurrency, restart, and full request flow
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-8/`
-- Status: implemented
-- Next action: Await plan-scoped reviews after all tasks are implemented.
+- Status: complete
+- Next action: Complete.
 
 ## Task 9: Document implementation and run final gates
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-9/`
-- Status: implemented
-- Next action: Await plan-scoped reviews.
+- Status: complete
+- Next action: Complete.
