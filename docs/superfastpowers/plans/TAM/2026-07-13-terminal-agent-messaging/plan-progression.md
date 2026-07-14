@@ -23,8 +23,8 @@ Last updated: 2026-07-14 01:07
 ## Task 1: Persist stable terminal identities
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-1/`
-- Status: implementing
-- Next action: Complete TAM-1 implementation and verification.
+- Status: implemented
+- Next action: Await plan-scoped reviews after all tasks are implemented.
 
 ## Task 2: Build protocol, directory, credentials, and limits
 
