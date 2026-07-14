@@ -18,7 +18,7 @@ Last updated: 2026-07-14 01:07
 - Spec review: unchecked
 - Code quality: unchecked
 - Integration review: unchecked
-- Next action: Implement TAM-1.
+- Next action: Implement TAM-6.
 
 ## Task 1: Persist stable terminal identities
 
@@ -53,8 +53,8 @@ Last updated: 2026-07-14 01:07
 ## Task 6: Bind pane identity, credentials, and PTY lifecycle
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-6/`
-- Status: pending
-- Next action: Start implementation.
+- Status: implemented
+- Next action: Await plan-scoped reviews after all tasks are implemented.
 
 ## Task 7: Add `teraxctl.exe` and Windows sidecar packaging
 
