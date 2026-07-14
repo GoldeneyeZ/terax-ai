@@ -48,6 +48,21 @@ export function collectTerminalCatalog(tabs: Tab[]): CatalogRecord[] {
   return records.sort((a, b) => a.terminalId.localeCompare(b.terminalId));
 }
 
+export function findDuplicateCatalogNames(
+  records: readonly CatalogRecord[],
+): string[] {
+  const counts = new Map<string, number>();
+  for (const record of records) {
+    if (!record.addressName) continue;
+    const canonical = record.addressName.toLowerCase();
+    counts.set(canonical, (counts.get(canonical) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([name]) => name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
 export function applyPersistedName(
   tabs: Tab[],
   request: PersistNameRequest,

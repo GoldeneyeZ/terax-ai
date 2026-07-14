@@ -1,8 +1,10 @@
 import type { Tab } from "@/modules/tabs";
 import { type RefObject, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import {
   ackName,
   collectTerminalCatalog,
+  findDuplicateCatalogNames,
   listenPersistName,
   persistAndSyncTerminalCatalog,
   type PersistNow,
@@ -38,6 +40,7 @@ export function useTerminalControlBridge({
   const catalogEligibleRef = useRef(false);
   const initialCatalogPersistedRef = useRef(false);
   const lastSyncedCatalogRef = useRef<string | null>(null);
+  const lastDuplicateWarningRef = useRef<string | null>(null);
   const syncChainRef = useRef<Promise<void>>(Promise.resolve());
   const nameChainRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -47,7 +50,23 @@ export function useTerminalControlBridge({
   persistNowRef.current = persistNow;
   catalogEligibleRef.current = spacesHydrated && controlCatalogEligible;
 
-  const catalogKey = JSON.stringify(collectTerminalCatalog(tabs));
+  const catalog = collectTerminalCatalog(tabs);
+  const catalogKey = JSON.stringify(catalog);
+  const duplicateNamesKey = findDuplicateCatalogNames(catalog).join(",");
+
+  useEffect(() => {
+    if (!spacesHydrated || !controlCatalogEligible) return;
+    if (!duplicateNamesKey) {
+      lastDuplicateWarningRef.current = null;
+      return;
+    }
+    if (lastDuplicateWarningRef.current === duplicateNamesKey) return;
+
+    lastDuplicateWarningRef.current = duplicateNamesKey;
+    toast.warning("Terminal names need repair", {
+      description: `Duplicate names are unavailable for agent messaging: ${duplicateNamesKey}. Rename the affected terminal panes.`,
+    });
+  }, [controlCatalogEligible, duplicateNamesKey, spacesHydrated]);
 
   useEffect(() => {
     if (!spacesHydrated || !controlCatalogEligible) return;

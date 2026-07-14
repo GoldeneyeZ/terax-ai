@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyPersistedName,
   collectTerminalCatalog,
+  findDuplicateCatalogNames,
   persistAndSyncTerminalCatalog,
   persistTerminalName,
   TerminalControlError,
@@ -88,6 +89,38 @@ function findTerminalLeaf(current: Tab[], terminalId: string) {
 }
 
 describe("terminal control catalog", () => {
+  it("identifies every duplicated canonical address name for repair", () => {
+    expect(
+      findDuplicateCatalogNames([
+        {
+          terminalId: FIRST_TERMINAL_ID,
+          addressName: "Agent-A",
+          private: false,
+        },
+        {
+          terminalId: SECOND_TERMINAL_ID,
+          addressName: undefined,
+          private: false,
+        },
+        {
+          terminalId: "00000000-0000-4000-8000-000000000003",
+          addressName: "agent-a",
+          private: true,
+        },
+        {
+          terminalId: "00000000-0000-4000-8000-000000000004",
+          addressName: "agent-b",
+          private: false,
+        },
+        {
+          terminalId: "00000000-0000-4000-8000-000000000005",
+          addressName: "AGENT-B",
+          private: false,
+        },
+      ]),
+    ).toEqual(["agent-a", "agent-b"]);
+  });
+
   it("projects every saved terminal leaf into one canonical catalog", () => {
     expect(collectTerminalCatalog(tabs)).toEqual([
       {
