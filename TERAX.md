@@ -44,6 +44,7 @@ A change to a core subsystem (terminal/shell spawn, workspace auth, git, fs, IPC
 **Rust (`src-tauri/`)** owns all OS access. The webview never touches the FS, processes, or shells directly - everything goes through `invoke()` calls to commands registered in `src-tauri/src/lib.rs`:
 
 - `pty::pty_*` - long-lived interactive PTY sessions (xterm ↔ portable-pty), managed by `PtyState` (`RwLock<HashMap<id, Session>>`). Output streams via a Tauri `Channel<PtyEvent>`.
+- `terminal_control::*` - Windows-native, source-authenticated terminal messaging behind `teraxctl.exe`. Rust owns the current-user named pipe, app-wide terminal directory, per-PTY capability digests, bounds, and awaited PTY writes; the frontend owns persisted `terminalId` and name state.
 - `fs::tree::*` (`fs_read_dir`, `list_subdirs`), `fs::file::*` (`fs_read_file`, `fs_write_file`, `fs_stat`, `fs_canonicalize`), `fs::mutate::*` (`fs_create_file`, `fs_create_dir`, `fs_rename`, `fs_delete`): file explorer + editor IO.
 - `fs::search::*` (`fs_search`, `fs_list_files`), `fs::grep::*` (`fs_grep`, `fs_glob`): fuzzy file finder + content search (powered by `ignore` + `grep-*` crates).
 - `git::commands::*`: full source-control surface (`git_status`, `git_diff`, `git_diff_content`, `git_stage`, `git_unstage`, `git_discard`, `git_commit`, `git_fetch`, `git_pull_ff_only`, `git_push`, `git_log`, `git_show_commit`, `git_commit_files`, `git_commit_file_diff`, `git_panel_snapshot`, `git_resolve_repo`, `git_remote_url`). All gated through the workspace authorization registry.
@@ -168,6 +169,7 @@ Long-form contributor guides live under `docs/`. These guides elaborate on `TERA
 - `docs/README.md` - index of contributor guides
 - `docs/architecture/two-process-model.md` - IPC boundary and command reference
 - `docs/architecture/pty-shell-integration.md` - PTY, shell init scripts, OSC, ConPTY, Job Object
+- `docs/architecture/terminal-agent-messaging.md` - stable terminal identities, `teraxctl`, named-pipe protocol, privacy, and failure model
 - `docs/architecture/security-model.md` - consolidated security model and boundaries
 - `docs/architecture/ai-subsystem.md` - AI stack, sessions, tools, adding a provider
 - `docs/architecture/terminal-renderer-pool.md` - renderer pool and DormantRing invariants

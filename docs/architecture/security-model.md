@@ -9,10 +9,19 @@ Terax runs shells, reads and writes files, and sends data to AI providers. The s
 The main trust boundaries are:
 
 1. **IPC boundary** - commands registered in `src-tauri/src/lib.rs`, gated by `src-tauri/capabilities/default.json`.
-2. **File-system boundary** - AI tools go through `src/modules/ai/lib/security.ts`; PTY spawn goes through the workspace authorization registry.
-3. **Network boundary** - AI HTTP proxy in `src-tauri/src/modules/net.rs` with SSRF and DNS-rebinding defenses.
-4. **Secret-storage boundary** - keys live in the OS keychain, never on disk or in `localStorage`.
-5. **Terminal escape-sequence boundary** - OSC sequences are parsed and acted on, but never blindly trusted to mutate state.
+2. **Terminal-control boundary** - Windows named-pipe requests are source-authenticated, bounded, and resolved to live PTY writers in Rust.
+3. **File-system boundary** - AI tools go through `src/modules/ai/lib/security.ts`; PTY spawn goes through the workspace authorization registry.
+4. **Network boundary** - AI HTTP proxy in `src-tauri/src/modules/net.rs` with SSRF and DNS-rebinding defenses.
+5. **Secret-storage boundary** - keys live in the OS keychain, never on disk or in `localStorage`.
+6. **Terminal escape-sequence boundary** - OSC sequences are parsed and acted on, but never blindly trusted to mutate state.
+
+## Terminal control
+
+Processes in eligible Windows-native PTYs receive an instance-specific named-pipe endpoint and a per-PTY random capability token. Rust stores only token digests, derives the source terminal from the capability, rejects caller-supplied source identity, and revokes the credential when the PTY closes.
+
+The named pipe is restricted to the current Windows user SID and rejects remote clients. The endpoint includes a random nonce. Frames, messages, connections, and per-source send rates are bounded. Private terminals are hidden from discovery and inbound resolution. Raw tokens, digests, and message payloads do not belong in logs or JSON diagnostics.
+
+This boundary does not protect against malware, debuggers, or hostile processes already running as the same OS user. Such a process may be able to inspect another process or inherited environment. The controls prevent unbound callers, remote attachment, accidental cross-pane claims, and predictable cross-instance attachment; they do not claim hostile same-user isolation.
 
 ## Secret-path deny-list
 
@@ -86,11 +95,12 @@ The agent detector (`src-tauri/src/modules/pty/agent_detect.rs`) is armed by `OS
 - New file-system-touching commands must respect the workspace authorization registry.
 - New network-facing commands must go through the `net.rs` proxy or reimplement the same classification and DNS pinning.
 - New plugin APIs must be added to `src-tauri/capabilities/default.json`.
-- Keys, tokens, and credentials stay in the keychain / Linux secrets file.
+- Long-lived API keys stay in the keychain / Linux secrets file. Ephemeral terminal-control capabilities stay in native pane environments and Rust memory only.
 
 ## See also
 
 - [`TERAX.md`](../../TERAX.md) - the architecture source of truth
 - [`docs/README.md`](../README.md) - index of contributor guides
 - [Two-process model](two-process-model.md) - IPC boundary and command catalog
+- [Terminal agent messaging](terminal-agent-messaging.md) - terminal-control protocol, credentials, privacy, and bounds
 - [AI subsystem](ai-subsystem.md) - tools, approval flow, and provider handling

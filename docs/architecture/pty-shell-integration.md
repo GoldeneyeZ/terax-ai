@@ -4,7 +4,7 @@ This guide elaborates on `TERAX.md`. If anything here conflicts with `TERAX.md`,
 
 ## Session model
 
-A terminal tab maps to one PTY session. Sessions live in `PtyState` (`src-tauri/src/modules/pty/mod.rs:20`):
+A terminal leaf maps to one PTY session while it is live. A tab may contain multiple split terminal leaves, each with its own PTY. Sessions live in `PtyState` (`src-tauri/src/modules/pty/mod.rs:20`):
 
 ```rust
 pub struct PtyState {
@@ -101,4 +101,5 @@ Terminal input sends `\r` (CR), not `\n` (LF). PowerShell on Windows requires CR
 - [`TERAX.md`](../../TERAX.md) - the architecture source of truth
 - [`docs/README.md`](../README.md) - index of contributor guides
 - [Two-process model](two-process-model.md) - IPC boundary and command catalog
+- [Terminal agent messaging](terminal-agent-messaging.md) - stable terminal identity and authenticated PTY-to-PTY input
 - [Terminal renderer pool](terminal-renderer-pool.md) - slot pooling and the DormantRing
