@@ -87,6 +87,7 @@ import {
   useTerminalFileDrop,
   writeToSession,
 } from "@/modules/terminal";
+import { useTerminalControlBridge } from "@/modules/terminal/lib/useTerminalControlBridge";
 import { ThemeProvider, useThemeFileEditing } from "@/modules/theme";
 import { UpdaterDialog } from "@/modules/updater";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
@@ -225,13 +226,23 @@ export default function App() {
     setActiveSpaceForNewTabs,
     adoptWorkspaceEnv,
   });
-  void controlCatalogEligible;
 
-  useSpacePersistence({
+  const persistedActiveSpaceId = activeSpaceId ?? DEFAULT_SPACE_ID;
+  const persistSpaceNow = useSpacePersistence({
     tabs,
     activeId,
-    activeSpaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    activeSpaceId: persistedActiveSpaceId,
     enabled: spacesHydrated,
+  });
+  useTerminalControlBridge({
+    tabs,
+    tabsRef,
+    activeId,
+    activeSpaceId: persistedActiveSpaceId,
+    replaceTabs,
+    persistNow: persistSpaceNow,
+    spacesHydrated,
+    controlCatalogEligible,
   });
 
   const prevSpaceRef = useRef(activeSpaceId);

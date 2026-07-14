@@ -13,7 +13,12 @@ type Params = Snapshot & {
   enabled: boolean;
 };
 
-type LastWrite = { json: string; activeTabIndex: number };
+type LastWrite = {
+  json: string;
+  activeTabIndex: number;
+};
+
+type PendingWrite = LastWrite & { promise: Promise<void> };
 
 export function useSpacePersistence({
   tabs,
@@ -22,6 +27,7 @@ export function useSpacePersistence({
   enabled,
 }: Params) {
   const last = useRef<Map<string, LastWrite>>(new Map());
+  const pendingWrites = useRef<Map<string, PendingWrite>>(new Map());
   const seeded = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Snapshot>({ tabs, activeId, activeSpaceId });
@@ -39,8 +45,9 @@ export function useSpacePersistence({
     }
   }
 
-  const flush = useCallback((snap: Snapshot) => {
+  const flush = useCallback(async (snap: Snapshot): Promise<void> => {
     const groups = new Map<string, Tab[]>();
+    const writes: Promise<void>[] = [];
     for (const t of snap.tabs) {
       const arr = groups.get(t.spaceId);
       if (arr) arr.push(t);
@@ -58,16 +65,42 @@ export function useSpacePersistence({
         if (idx >= 0) activeTabIndex = idx;
       }
       const json = JSON.stringify(serialized);
+      const pending = pendingWrites.current.get(spaceId);
       if (
+        pending &&
+        pending.json === json &&
+        pending.activeTabIndex === activeTabIndex
+      ) {
+        writes.push(pending.promise);
+        continue;
+      }
+      if (
+        !pending &&
         prev &&
         prev.json === json &&
         prev.activeTabIndex === activeTabIndex
       ) {
         continue;
       }
-      last.current.set(spaceId, { json, activeTabIndex });
-      void saveState(spaceId, { tabs: serialized, activeTabIndex });
+      let promise: Promise<void>;
+      promise = (pending?.promise.catch(() => {}) ?? Promise.resolve())
+        .then(() => saveState(spaceId, { tabs: serialized, activeTabIndex }))
+        .then(() => {
+          if (pendingWrites.current.get(spaceId)?.promise === promise) {
+            last.current.set(spaceId, { json, activeTabIndex });
+            pendingWrites.current.delete(spaceId);
+          }
+        })
+        .catch((error) => {
+          if (pendingWrites.current.get(spaceId)?.promise === promise) {
+            pendingWrites.current.delete(spaceId);
+          }
+          throw error;
+        });
+      pendingWrites.current.set(spaceId, { json, activeTabIndex, promise });
+      writes.push(promise);
     }
+    await Promise.all(writes);
   }, []);
 
   useEffect(() => {
@@ -76,7 +109,7 @@ export function useSpacePersistence({
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       timer.current = null;
-      flush(snap);
+      void flush(snap);
     }, DEBOUNCE_MS);
     return () => {
       if (timer.current) clearTimeout(timer.current);
@@ -86,9 +119,9 @@ export function useSpacePersistence({
   useEffect(() => {
     if (!enabled) return;
     const onHidden = () => {
-      if (document.visibilityState === "hidden") flush(latest.current);
+      if (document.visibilityState === "hidden") void flush(latest.current);
     };
-    const onLeave = () => flush(latest.current);
+    const onLeave = () => void flush(latest.current);
     document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("blur", onLeave);
     window.addEventListener("beforeunload", onLeave);
@@ -96,7 +129,17 @@ export function useSpacePersistence({
       document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener("blur", onLeave);
       window.removeEventListener("beforeunload", onLeave);
-      flush(latest.current);
+      void flush(latest.current);
     };
   }, [enabled, flush]);
+
+  return useCallback(
+    (nextTabs: Tab[], nextActiveId: number, nextActiveSpaceId: string) =>
+      flush({
+        tabs: nextTabs,
+        activeId: nextActiveId,
+        activeSpaceId: nextActiveSpaceId,
+      }),
+    [flush],
+  );
 }

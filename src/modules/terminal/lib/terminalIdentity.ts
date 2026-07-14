@@ -19,13 +19,27 @@ export function withAddressName(
   terminalId: TerminalId,
   addressName: string | undefined,
 ): PaneNode {
+  return updateAddressName(node, terminalId, addressName).node;
+}
+
+export function updateAddressName(
+  node: PaneNode,
+  terminalId: TerminalId,
+  addressName: string | undefined,
+): { node: PaneNode; updated: boolean } {
   if (node.kind === "leaf") {
-    return node.terminalId === terminalId ? { ...node, addressName } : node;
+    return node.terminalId === terminalId
+      ? { node: { ...node, addressName }, updated: true }
+      : { node, updated: false };
   }
+  let updated = false;
+  const children = node.children.map((child) => {
+    const result = updateAddressName(child, terminalId, addressName);
+    updated ||= result.updated;
+    return result.node;
+  });
   return {
-    ...node,
-    children: node.children.map((child) =>
-      withAddressName(child, terminalId, addressName),
-    ),
+    node: updated ? { ...node, children } : node,
+    updated,
   };
 }
