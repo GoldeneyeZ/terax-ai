@@ -2,16 +2,25 @@ import { describe, expect, it } from "vitest";
 import {
   firstLeafSlotId,
   leafIds,
+  splitLeaf,
   swapLeafInDirection,
   type PaneNode,
 } from "@/modules/terminal/lib/panes";
+
+function terminalId(id: number): string {
+  return `00000000-0000-4000-8000-${id.toString().padStart(12, "0")}`;
+}
 
 function row(...ids: number[]): PaneNode {
   return {
     kind: "split",
     id: 100,
     dir: "row",
-    children: ids.map((id) => ({ kind: "leaf", id })),
+    children: ids.map((id) => ({
+      kind: "leaf",
+      id,
+      terminalId: terminalId(id),
+    })),
   };
 }
 
@@ -20,7 +29,11 @@ function col(...ids: number[]): PaneNode {
     kind: "split",
     id: 200,
     dir: "col",
-    children: ids.map((id) => ({ kind: "leaf", id })),
+    children: ids.map((id) => ({
+      kind: "leaf",
+      id,
+      terminalId: terminalId(id),
+    })),
   };
 }
 
@@ -52,14 +65,14 @@ describe("swapLeafInDirection", () => {
       id: 10,
       dir: "row",
       children: [
-        { kind: "leaf", id: 1 },
+        { kind: "leaf", id: 1, terminalId: terminalId(1) },
         {
           kind: "split",
           id: 11,
           dir: "col",
           children: [
-            { kind: "leaf", id: 2 },
-            { kind: "leaf", id: 3 },
+            { kind: "leaf", id: 2, terminalId: terminalId(2) },
+            { kind: "leaf", id: 3, terminalId: terminalId(3) },
           ],
         },
       ],
@@ -98,8 +111,8 @@ describe("swapLeafInDirection", () => {
       id: 100,
       dir: "row",
       children: [
-        { kind: "leaf", id: 1, cwd: "/one" },
-        { kind: "leaf", id: 2, cwd: "/two" },
+        { kind: "leaf", id: 1, terminalId: terminalId(1), cwd: "/one" },
+        { kind: "leaf", id: 2, terminalId: terminalId(2), cwd: "/two" },
       ],
     };
     const swapped = swapLeafInDirection(tree, 2, "left");
@@ -108,12 +121,14 @@ describe("swapLeafInDirection", () => {
       expect(swapped.children[0]).toEqual({
         kind: "leaf",
         id: 2,
+        terminalId: terminalId(2),
         slotId: 1,
         cwd: "/two",
       });
       expect(swapped.children[1]).toEqual({
         kind: "leaf",
         id: 1,
+        terminalId: terminalId(1),
         slotId: 2,
         cwd: "/one",
       });
@@ -139,7 +154,35 @@ describe("swapLeafInDirection", () => {
   });
 
   it("does nothing when the tree contains only one pane", () => {
-    const tree: PaneNode = { kind: "leaf", id: 1 };
+    const tree: PaneNode = { kind: "leaf", id: 1, terminalId: terminalId(1) };
     expect(swapLeafInDirection(tree, 1, "left")).toBe(tree);
+  });
+});
+
+describe("splitLeaf", () => {
+  it("assigns a stable terminal identity to the new leaf", () => {
+    const tree: PaneNode = {
+      kind: "leaf",
+      id: 1,
+      terminalId: "00000000-0000-4000-8000-000000000001",
+    };
+
+    const split = splitLeaf(
+      tree,
+      1,
+      2,
+      3,
+      "row",
+      "/work",
+      () => "00000000-0000-4000-8000-000000000003",
+    );
+
+    expect(split).toMatchObject({
+      kind: "split",
+      children: [
+        { terminalId: "00000000-0000-4000-8000-000000000001" },
+        { terminalId: "00000000-0000-4000-8000-000000000003" },
+      ],
+    });
   });
 });

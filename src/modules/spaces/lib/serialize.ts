@@ -3,6 +3,7 @@ import {
   type PaneNode,
   type SplitDir,
 } from "@/modules/terminal/lib/panes";
+import { newTerminalId } from "@/modules/terminal/lib/terminalIdentity";
 import type {
   EditorTab,
   MarkdownTab,
@@ -12,7 +13,13 @@ import type {
 } from "@/modules/tabs/lib/useTabs";
 
 export type SerializedNode =
-  | { kind: "leaf"; cwd?: string; active?: boolean }
+  | {
+      kind: "leaf";
+      terminalId?: string;
+      addressName?: string;
+      cwd?: string;
+      active?: boolean;
+    }
   | { kind: "split"; dir: SplitDir; children: SerializedNode[] };
 
 export type SerializedTab =
@@ -43,6 +50,8 @@ function serializeNode(node: PaneNode, activeLeafId: number): SerializedNode {
   if (isLeaf(node)) {
     return {
       kind: "leaf",
+      terminalId: node.terminalId,
+      ...(node.addressName !== undefined && { addressName: node.addressName }),
       ...(node.cwd !== undefined && { cwd: node.cwd }),
       ...(node.id === activeLeafId && { active: true }),
     };
@@ -103,22 +112,35 @@ type HydratedTree = {
   firstLeafCwd?: string;
 };
 
+type Migration = { changed: boolean };
+
 function hydrateNode(
   node: SerializedNode,
   allocId: () => number,
+  allocTerminalId: () => string,
+  migration: Migration,
   acc: { activeLeafId: number | null },
 ): PaneNode {
   if (node.kind === "leaf") {
     const id = allocId();
+    const terminalId = node.terminalId ?? allocTerminalId();
+    if (node.terminalId === undefined) migration.changed = true;
     if (node.active && acc.activeLeafId === null) acc.activeLeafId = id;
     return {
       kind: "leaf",
       id,
+      terminalId,
+      ...(node.addressName !== undefined && { addressName: node.addressName }),
       ...(node.cwd !== undefined && { cwd: node.cwd }),
     };
   }
-  const children = node.children.map((c) => hydrateNode(c, allocId, acc));
-  if (children.length === 0) return { kind: "leaf", id: allocId() };
+  const children = node.children.map((c) =>
+    hydrateNode(c, allocId, allocTerminalId, migration, acc),
+  );
+  if (children.length === 0) {
+    migration.changed = true;
+    return { kind: "leaf", id: allocId(), terminalId: allocTerminalId() };
+  }
   if (children.length === 1) return children[0];
   return { kind: "split", id: allocId(), dir: node.dir, children };
 }
@@ -126,9 +148,11 @@ function hydrateNode(
 function hydrateTree(
   tree: SerializedNode,
   allocId: () => number,
+  allocTerminalId: () => string,
+  migration: Migration,
 ): HydratedTree {
   const acc: { activeLeafId: number | null } = { activeLeafId: null };
-  const paneTree = hydrateNode(tree, allocId, acc);
+  const paneTree = hydrateNode(tree, allocId, allocTerminalId, migration, acc);
   const leaves = collectLeaves(paneTree);
   const activeLeafId = acc.activeLeafId ?? leaves[0]?.id ?? allocId();
   const firstLeafCwd =
@@ -145,10 +169,17 @@ function hydrateTab(
   s: SerializedTab,
   spaceId: string,
   allocId: () => number,
+  allocTerminalId: () => string,
+  migration: Migration,
 ): Tab | null {
   switch (s.kind) {
     case "terminal": {
-      const { tree, activeLeafId, firstLeafCwd } = hydrateTree(s.tree, allocId);
+      const { tree, activeLeafId, firstLeafCwd } = hydrateTree(
+        s.tree,
+        allocId,
+        allocTerminalId,
+        migration,
+      );
       const title =
         s.customTitle ??
         (firstLeafCwd ? basename(firstLeafCwd) : s.blocks ? "blocks" : "shell");
@@ -203,6 +234,7 @@ export function freshTerminalTab(
   spaceId: string,
   cwd: string | null,
   allocId: () => number,
+  allocTerminalId: () => string = newTerminalId,
 ): TerminalTab {
   const leafId = allocId();
   return {
@@ -212,7 +244,12 @@ export function freshTerminalTab(
     cold: true,
     title: cwd ? basename(cwd) : "shell",
     cwd: cwd ?? undefined,
-    paneTree: { kind: "leaf", id: leafId, ...(cwd && { cwd }) },
+    paneTree: {
+      kind: "leaf",
+      id: leafId,
+      terminalId: allocTerminalId(),
+      ...(cwd && { cwd }),
+    },
     activeLeafId: leafId,
   };
 }
@@ -222,15 +259,27 @@ export function hydrateTabs(
   spaceId: string,
   allocId: () => number,
 ): Tab[] {
-  if (!Array.isArray(serialized)) return [];
+  return hydrateTabsWithMigration(serialized, spaceId, allocId).tabs;
+}
+
+export type HydratedTabs = { tabs: Tab[]; migrated: boolean };
+
+export function hydrateTabsWithMigration(
+  serialized: SerializedTab[],
+  spaceId: string,
+  allocId: () => number,
+  allocTerminalId: () => string = newTerminalId,
+): HydratedTabs {
+  const migration: Migration = { changed: false };
+  if (!Array.isArray(serialized)) return { tabs: [], migrated: false };
   const out: Tab[] = [];
   for (const s of serialized) {
     try {
-      const tab = hydrateTab(s, spaceId, allocId);
+      const tab = hydrateTab(s, spaceId, allocId, allocTerminalId, migration);
       if (tab) out.push(tab);
     } catch {
       // Skip corrupted entries rather than failing the whole restore.
     }
   }
-  return out;
+  return { tabs: out, migrated: migration.changed };
 }

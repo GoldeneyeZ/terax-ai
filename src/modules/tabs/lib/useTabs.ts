@@ -14,6 +14,7 @@ import {
   splitLeaf,
   swapLeafInDirection,
 } from "@/modules/terminal/lib/panes";
+import { newTerminalId } from "@/modules/terminal/lib/terminalIdentity";
 import { disposeSession } from "@/modules/terminal/lib/useTerminalSession";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -210,7 +211,7 @@ function coldTerminalTab(
     cold: true,
     title: cwd ? basename(cwd) : "shell",
     cwd,
-    paneTree: { kind: "leaf", id: leafId, cwd },
+    paneTree: { kind: "leaf", id: leafId, terminalId: newTerminalId(), cwd },
     activeLeafId: leafId,
   };
 }
@@ -235,7 +236,10 @@ export function planSpaceRemoval(
   let activeId = currentActiveId;
   if (!next.some((t) => t.spaceId === fallbackSpaceId)) {
     const tabId = allocId();
-    next = [...next, coldTerminalTab(tabId, allocId(), fallbackSpaceId, fallbackCwd)];
+    next = [
+      ...next,
+      coldTerminalTab(tabId, allocId(), fallbackSpaceId, fallbackCwd),
+    ];
     activeId = tabId;
   } else if (!next.some((t) => t.id === currentActiveId)) {
     const inFallback = next.filter((t) => t.spaceId === fallbackSpaceId);
@@ -256,7 +260,12 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         cold: true,
         title: initial?.title ?? "shell",
         cwd: initial?.cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd: initial?.cwd },
+        paneTree: {
+          kind: "leaf",
+          id: leafId,
+          terminalId: newTerminalId(),
+          cwd: initial?.cwd,
+        },
         activeLeafId: leafId,
       },
     ];
@@ -315,7 +324,12 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         cold: true,
         title: cwd ? basename(cwd) : "shell",
         cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd },
+        paneTree: {
+          kind: "leaf",
+          id: leafId,
+          terminalId: newTerminalId(),
+          cwd,
+        },
         activeLeafId: leafId,
       },
     ]);
@@ -411,7 +425,12 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         spaceId: activeSpaceIdRef.current,
         title: "shell",
         cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd },
+        paneTree: {
+          kind: "leaf",
+          id: leafId,
+          terminalId: newTerminalId(),
+          cwd,
+        },
         activeLeafId: leafId,
       },
     ]);
@@ -430,7 +449,12 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         spaceId: activeSpaceIdRef.current,
         title: "blocks",
         cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd },
+        paneTree: {
+          kind: "leaf",
+          id: leafId,
+          terminalId: newTerminalId(),
+          cwd,
+        },
         activeLeafId: leafId,
         blocks: true,
       },
@@ -457,7 +481,12 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         spaceId: activeSpaceIdRef.current,
         title,
         cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd },
+        paneTree: {
+          kind: "leaf",
+          id: leafId,
+          terminalId: newTerminalId(),
+          cwd,
+        },
         activeLeafId: leafId,
       },
     ]);
@@ -476,7 +505,12 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         spaceId: activeSpaceIdRef.current,
         title: "private",
         cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd },
+        paneTree: {
+          kind: "leaf",
+          id: leafId,
+          terminalId: newTerminalId(),
+          cwd,
+        },
         activeLeafId: leafId,
         private: true,
       },
@@ -1146,7 +1180,12 @@ export function useTabs(initial?: Partial<TerminalTab>) {
           spaceId: activeSpaceIdRef.current,
           title: "shell",
           cwd,
-          paneTree: { kind: "leaf", id: leafId, cwd },
+          paneTree: {
+            kind: "leaf",
+            id: leafId,
+            terminalId: newTerminalId(),
+            cwd,
+          },
           activeLeafId: leafId,
         },
       ];

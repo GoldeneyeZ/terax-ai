@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { PaneNode } from "@/modules/terminal/lib/panes";
 import type { Tab } from "@/modules/tabs/lib/useTabs";
-import { hydrateTabs, serializeTabs, type SerializedTab } from "./serialize";
+import {
+  hydrateTabs,
+  hydrateTabsWithMigration,
+  serializeTabs,
+  type SerializedTab,
+} from "./serialize";
 
 function counter(start = 100): () => number {
   let n = start;
@@ -18,13 +23,41 @@ function term(over: Partial<Extract<Tab, { kind: "terminal" }>>): Tab {
     kind: "terminal",
     spaceId: "s1",
     title: "shell",
-    paneTree: { kind: "leaf", id: 2, cwd: "/a" },
+    paneTree: {
+      kind: "leaf",
+      id: 2,
+      terminalId: "00000000-0000-4000-8000-000000000002",
+      cwd: "/a",
+    },
     activeLeafId: 2,
     ...over,
   } as Tab;
 }
 
 describe("serializeTabs", () => {
+  it("persists stable terminal identity and address name", () => {
+    const [serialized] = serializeTabs([
+      term({
+        paneTree: {
+          kind: "leaf",
+          id: 2,
+          terminalId: "00000000-0000-4000-8000-000000000001",
+          addressName: "agent-a",
+        },
+      }),
+    ]);
+
+    expect(serialized).toMatchObject({
+      kind: "terminal",
+      tree: {
+        kind: "leaf",
+        terminalId: "00000000-0000-4000-8000-000000000001",
+        addressName: "agent-a",
+        active: true,
+      },
+    });
+  });
+
   it("drops private terminals and transient kinds", () => {
     const tabs: Tab[] = [
       term({ id: 1 }),
@@ -59,8 +92,18 @@ describe("serializeTabs", () => {
       id: 10,
       dir: "row",
       children: [
-        { kind: "leaf", id: 11, cwd: "/a" },
-        { kind: "leaf", id: 12, cwd: "/b" },
+        {
+          kind: "leaf",
+          id: 11,
+          terminalId: "00000000-0000-4000-8000-000000000011",
+          cwd: "/a",
+        },
+        {
+          kind: "leaf",
+          id: 12,
+          terminalId: "00000000-0000-4000-8000-000000000012",
+          cwd: "/b",
+        },
       ],
     };
     const [s] = serializeTabs([term({ paneTree: tree, activeLeafId: 12 })]);
@@ -74,14 +117,74 @@ describe("serializeTabs", () => {
 });
 
 describe("hydrateTabs", () => {
+  it("migrates a legacy leaf with one deterministic terminal identity", () => {
+    const migrated = hydrateTabsWithMigration(
+      [
+        {
+          kind: "terminal",
+          tree: { kind: "leaf", active: true },
+        },
+      ],
+      "s1",
+      counter(),
+      () => "00000000-0000-4000-8000-000000000099",
+    );
+
+    expect(migrated.migrated).toBe(true);
+    expect(migrated.tabs[0]).toMatchObject({
+      paneTree: {
+        kind: "leaf",
+        terminalId: "00000000-0000-4000-8000-000000000099",
+      },
+    });
+  });
+
+  it("preserves persisted identity without reporting a migration", () => {
+    const restored = hydrateTabsWithMigration(
+      [
+        {
+          kind: "terminal",
+          tree: {
+            kind: "leaf",
+            terminalId: "00000000-0000-4000-8000-000000000001",
+            addressName: "agent-a",
+            active: true,
+          },
+        },
+      ],
+      "s1",
+      counter(),
+      () => "unused",
+    );
+
+    expect(restored.migrated).toBe(false);
+    expect(restored.tabs[0]).toMatchObject({
+      paneTree: {
+        kind: "leaf",
+        terminalId: "00000000-0000-4000-8000-000000000001",
+        addressName: "agent-a",
+      },
+    });
+  });
+
   it("round-trips structure, cwd, blocks and active leaf", () => {
     const tree: PaneNode = {
       kind: "split",
       id: 10,
       dir: "col",
       children: [
-        { kind: "leaf", id: 11, cwd: "/a" },
-        { kind: "leaf", id: 12, cwd: "/b" },
+        {
+          kind: "leaf",
+          id: 11,
+          terminalId: "00000000-0000-4000-8000-000000000011",
+          cwd: "/a",
+        },
+        {
+          kind: "leaf",
+          id: 12,
+          terminalId: "00000000-0000-4000-8000-000000000012",
+          cwd: "/b",
+        },
       ],
     };
     const tabs: Tab[] = [
@@ -116,8 +219,18 @@ describe("hydrateTabs", () => {
       id: 10,
       dir: "row",
       children: [
-        { kind: "leaf", id: 11, cwd: "/a" },
-        { kind: "leaf", id: 12, cwd: "/b" },
+        {
+          kind: "leaf",
+          id: 11,
+          terminalId: "00000000-0000-4000-8000-000000000011",
+          cwd: "/a",
+        },
+        {
+          kind: "leaf",
+          id: 12,
+          terminalId: "00000000-0000-4000-8000-000000000012",
+          cwd: "/b",
+        },
       ],
     };
     const serialized = serializeTabs([

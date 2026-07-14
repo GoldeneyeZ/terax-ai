@@ -215,7 +215,7 @@ export default function App() {
     [switchWorkspace, activeSpaceId],
   );
 
-  useSpacesBoot({
+  const controlCatalogEligible = useSpacesBoot({
     ready: launchCwdResolved,
     launchCwd,
     home,
@@ -225,6 +225,7 @@ export default function App() {
     setActiveSpaceForNewTabs,
     adoptWorkspaceEnv,
   });
+  void controlCatalogEligible;
 
   useSpacePersistence({
     tabs,

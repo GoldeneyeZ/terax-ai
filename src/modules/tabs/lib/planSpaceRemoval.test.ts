@@ -7,7 +7,13 @@ function term(id: number, spaceId: string): Tab {
     kind: "terminal",
     spaceId,
     title: "shell",
-    paneTree: { kind: "leaf", id: id * 10 },
+    paneTree: {
+      kind: "leaf",
+      id: id * 10,
+      terminalId: `00000000-0000-4000-8000-${(id * 10)
+        .toString()
+        .padStart(12, "0")}`,
+    },
     activeLeafId: id * 10,
   } as Tab;
 }
@@ -53,6 +59,12 @@ describe("planSpaceRemoval", () => {
     expect(spawned.cold).toBe(true);
     expect(spawned.cwd).toBe("/work");
     expect(spawned.title).toBe("work");
+    expect(spawned.paneTree).toMatchObject({
+      kind: "leaf",
+      terminalId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      ),
+    });
     expect(plan?.activeId).toBe(100);
     expect(plan?.disposeLeafIds).toEqual([10, 20]);
   });

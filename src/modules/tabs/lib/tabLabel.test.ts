@@ -8,7 +8,11 @@ function terminalTab(over: Partial<TerminalTab> = {}): TerminalTab {
     kind: "terminal",
     spaceId: "default",
     title: "shell",
-    paneTree: { kind: "leaf", id: 2 },
+    paneTree: {
+      kind: "leaf",
+      id: 2,
+      terminalId: "00000000-0000-4000-8000-000000000002",
+    },
     activeLeafId: 2,
     ...over,
   };

@@ -8,7 +8,13 @@ function term(id: number, over: Partial<Tab> = {}): Tab {
     kind: "terminal",
     spaceId: "s1",
     title: "shell",
-    paneTree: { kind: "leaf", id: id * 10 },
+    paneTree: {
+      kind: "leaf",
+      id: id * 10,
+      terminalId: `00000000-0000-4000-8000-${(id * 10)
+        .toString()
+        .padStart(12, "0")}`,
+    },
     activeLeafId: id * 10,
     ...over,
   } as Tab;

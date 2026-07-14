@@ -1,3 +1,5 @@
+import type { TerminalId } from "./terminalIdentity";
+
 export type PaneId = number;
 
 export type SplitDir = "row" | "col";
@@ -11,7 +13,14 @@ export type PaneBounds = {
 };
 
 export type PaneNode =
-  | { kind: "leaf"; id: PaneId; slotId?: PaneId; cwd?: string }
+  | {
+      kind: "leaf";
+      id: PaneId;
+      terminalId: TerminalId;
+      addressName?: string;
+      slotId?: PaneId;
+      cwd?: string;
+    }
   | {
       kind: "split";
       id: PaneId;
@@ -76,13 +85,19 @@ export function splitLeaf(
   newLeafId: PaneId,
   dir: SplitDir,
   newCwd?: string,
+  allocTerminalId: () => string = crypto.randomUUID,
 ): PaneNode {
   if (tree.kind === "split" && tree.dir === dir) {
     const idx = tree.children.findIndex(
       (c) => c.kind === "leaf" && c.id === targetId,
     );
     if (idx >= 0) {
-      const newLeaf: PaneNode = { kind: "leaf", id: newLeafId, cwd: newCwd };
+      const newLeaf: PaneNode = {
+        kind: "leaf",
+        id: newLeafId,
+        terminalId: allocTerminalId(),
+        cwd: newCwd,
+      };
       return {
         ...tree,
         children: [
@@ -95,7 +110,12 @@ export function splitLeaf(
   }
   if (isLeaf(tree)) {
     if (tree.id !== targetId) return tree;
-    const newLeaf: PaneNode = { kind: "leaf", id: newLeafId, cwd: newCwd };
+    const newLeaf: PaneNode = {
+      kind: "leaf",
+      id: newLeafId,
+      terminalId: allocTerminalId(),
+      cwd: newCwd,
+    };
     return {
       kind: "split",
       id: newSplitId,
@@ -106,7 +126,15 @@ export function splitLeaf(
   return {
     ...tree,
     children: tree.children.map((c) =>
-      splitLeaf(c, targetId, newSplitId, newLeafId, dir, newCwd),
+      splitLeaf(
+        c,
+        targetId,
+        newSplitId,
+        newLeafId,
+        dir,
+        newCwd,
+        allocTerminalId,
+      ),
     ),
   };
 }
