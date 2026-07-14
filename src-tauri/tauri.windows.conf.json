@@ -11,5 +11,12 @@
         "shadow": false
       }
     ]
+  },
+  "build": {
+    "beforeDevCommand": "pnpm dev:teraxctl-sidecar && pnpm dev",
+    "beforeBuildCommand": "pnpm build && pnpm build:teraxctl-sidecar"
+  },
+  "bundle": {
+    "externalBin": ["binaries/teraxctl"]
   }
 }

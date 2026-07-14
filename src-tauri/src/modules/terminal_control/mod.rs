@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod credentials;
 pub mod directory;
 pub mod framing;

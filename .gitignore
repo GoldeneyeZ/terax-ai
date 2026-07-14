@@ -26,3 +26,4 @@ stats.html
 *.sw?
 
 *.tsbuildinfo
+src-tauri/binaries/teraxctl-*

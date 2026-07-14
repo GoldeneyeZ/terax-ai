@@ -10,6 +10,8 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:teraxctl-sidecar": "node scripts/prepare-teraxctl-sidecar.mjs --debug",
+    "build:teraxctl-sidecar": "node scripts/prepare-teraxctl-sidecar.mjs --release",
     "dev:inspect": "INSPECT=true vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
