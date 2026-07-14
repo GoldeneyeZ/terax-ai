@@ -71,5 +71,5 @@ Last updated: 2026-07-14 01:07
 ## Task 9: Document implementation and run final gates
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-9/`
-- Status: implementing
-- Next action: Complete TAM-9 implementation and verification.
+- Status: implemented
+- Next action: Await plan-scoped reviews.
