@@ -12,7 +12,7 @@ use std::thread;
 use portable_pty::PtySize;
 use tauri::ipc::{Channel, Response};
 
-use crate::modules::terminal_control::PtySink;
+use crate::modules::terminal_control::{PtySink, TerminalControlState};
 use crate::modules::workspace::{user_spawn_cwd_or_home, WorkspaceEnv, WorkspaceRegistry};
 use session::Session;
 
@@ -56,6 +56,42 @@ impl PtyState {
             });
         result
     }
+
+    pub fn close_all(&self, control: &TerminalControlState) -> Result<usize, String> {
+        let ids = self
+            .sessions
+            .read()
+            .unwrap()
+            .keys()
+            .copied()
+            .collect::<Vec<_>>();
+        for id in &ids {
+            control
+                .begin_close_by_pty(*id)
+                .map_err(|error| error.to_string())?;
+        }
+        let drained: Vec<(u32, Arc<Session>)> = {
+            let mut sessions = self.sessions.write().unwrap();
+            sessions.drain().collect()
+        };
+        let count = drained.len();
+        for (id, session) in drained {
+            if let Err(error) = session.killer.lock().unwrap().kill() {
+                log::debug!("pty_close_all: kill id={id} returned {error}");
+            }
+            thread::Builder::new()
+                .name(format!("terax-pty-drop-{id}"))
+                .spawn(move || session::drop_session(session))
+                .expect("spawn pty drop thread");
+            control
+                .finish_close_by_pty(id)
+                .map_err(|error| error.to_string())?;
+        }
+        if count > 0 {
+            log::info!("pty_close_all: reaped {count} orphaned session(s)");
+        }
+        Ok(count)
+    }
 }
 
 impl PtySink for PtyState {
@@ -70,33 +106,75 @@ pub async fn pty_open(
     app: tauri::AppHandle,
     state: tauri::State<'_, PtyState>,
     registry: tauri::State<'_, WorkspaceRegistry>,
+    control: tauri::State<'_, TerminalControlState>,
     cols: u16,
     rows: u16,
     cwd: Option<String>,
     workspace: Option<WorkspaceEnv>,
+    terminal_id: String,
+    address_name: Option<String>,
+    private: bool,
     blocks: Option<bool>,
     shell: Option<String>,
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
 ) -> Result<u32, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
+    let credential = control
+        .prepare_spawn(&terminal_id, address_name.as_deref(), private, &workspace)
+        .map_err(|error| error.to_string())?;
     let blocks = blocks.unwrap_or(false);
     let cwd = user_spawn_cwd_or_home(&registry, cwd.as_deref(), &workspace);
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
-    let session = tauri::async_runtime::spawn_blocking(move || {
-        session::spawn(id, app, cols, rows, cwd, workspace, blocks, shell, on_data, on_exit)
-            .map(|(s, _)| s)
+    let spawn_credential = credential.clone();
+    let spawned = tauri::async_runtime::spawn_blocking(move || {
+        session::spawn(
+            id,
+            app,
+            cols,
+            rows,
+            cwd,
+            workspace,
+            blocks,
+            shell,
+            spawn_credential,
+            on_data,
+            on_exit,
+        )
+        .map(|(s, _)| s)
     })
-    .await
-    .map_err(|e| {
-        log::error!("pty_open join failed: {e}");
-        e.to_string()
-    })?
-    .map_err(|e| {
-        log::error!("pty_open failed: {e}");
-        e
-    })?;
+    .await;
+    let spawned = match spawned {
+        Ok(result) => result.map_err(|error| {
+            log::error!("pty_open failed: {error}");
+            error
+        }),
+        Err(error) => {
+            log::error!("pty_open join failed: {error}");
+            Err(error.to_string())
+        }
+    };
+    let session = match spawned {
+        Ok(session) => session,
+        Err(error) => {
+            control.abort_spawn(&terminal_id);
+            return Err(error);
+        }
+    };
     state.sessions.write().unwrap().insert(id, session);
+    if let Some(credential) = credential.as_ref() {
+        if let Err(error) = control.activate_spawn(credential, id) {
+            control.abort_spawn(&terminal_id);
+            if let Some(session) = state.take(id) {
+                let _ = session.killer.lock().unwrap().kill();
+                thread::Builder::new()
+                    .name(format!("terax-pty-drop-{id}"))
+                    .spawn(move || session::drop_session(session))
+                    .expect("spawn pty drop thread");
+            }
+            return Err(error.to_string());
+        }
+    }
     // The shell can exit before this insert (instant failure, `exit` in an rc
     // file); the waiter's reap then ran with the id absent. Re-check and reap
     // so the pseudoconsole isn't stranded.
@@ -108,12 +186,14 @@ pub async fn pty_open(
         .map(|s| s.exited.load(Ordering::Acquire))
         .unwrap_or(false);
     if exited {
+        let _ = control.begin_close_by_pty(id);
         if let Some(s) = state.take(id) {
             thread::Builder::new()
                 .name(format!("terax-pty-drop-{id}"))
                 .spawn(move || session::drop_session(s))
                 .expect("spawn pty drop thread");
         }
+        let _ = control.finish_close_by_pty(id);
     }
     log::info!("pty opened id={id} cols={cols} rows={rows}");
     Ok(id)
@@ -173,7 +253,14 @@ pub fn pty_resize(
 }
 
 #[tauri::command]
-pub fn pty_close(state: tauri::State<PtyState>, id: u32) -> Result<(), String> {
+pub fn pty_close(
+    state: tauri::State<PtyState>,
+    control: tauri::State<TerminalControlState>,
+    id: u32,
+) -> Result<(), String> {
+    control
+        .begin_close_by_pty(id)
+        .map_err(|error| error.to_string())?;
     let session = state.sessions.write().unwrap().remove(&id);
     if let Some(s) = session {
         if let Err(e) = s.killer.lock().unwrap().kill() {
@@ -198,6 +285,9 @@ pub fn pty_close(state: tauri::State<PtyState>, id: u32) -> Result<(), String> {
     } else {
         log::debug!("pty_close: unknown id={id}");
     }
+    control
+        .finish_close_by_pty(id)
+        .map_err(|error| error.to_string())?;
     Ok(())
 }
 
@@ -255,8 +345,7 @@ fn shell_has_children(shell_pid: u32) -> bool {
     use std::mem::{size_of, zeroed};
     use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32,
-        TH32CS_SNAPPROCESS,
+        CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPPROCESS,
     };
     unsafe {
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -285,25 +374,11 @@ fn shell_has_children(shell_pid: u32) -> bool {
 // A fresh webview load orphans the previous frontend's sessions in this still
 // running process; reap them on boot before any new tab spawns.
 #[tauri::command]
-pub fn pty_close_all(state: tauri::State<PtyState>) -> Result<usize, String> {
-    let drained: Vec<(u32, Arc<Session>)> = {
-        let mut sessions = state.sessions.write().unwrap();
-        sessions.drain().collect()
-    };
-    let count = drained.len();
-    for (id, s) in drained {
-        if let Err(e) = s.killer.lock().unwrap().kill() {
-            log::debug!("pty_close_all: kill id={id} returned {e}");
-        }
-        thread::Builder::new()
-            .name(format!("terax-pty-drop-{id}"))
-            .spawn(move || session::drop_session(s))
-            .expect("spawn pty drop thread");
-    }
-    if count > 0 {
-        log::info!("pty_close_all: reaped {count} orphaned session(s)");
-    }
-    Ok(count)
+pub fn pty_close_all(
+    state: tauri::State<PtyState>,
+    control: tauri::State<TerminalControlState>,
+) -> Result<usize, String> {
+    state.close_all(&control)
 }
 
 #[tauri::command]

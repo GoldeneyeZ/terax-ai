@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use portable_pty::CommandBuilder;
 
+use crate::modules::terminal_control::SpawnCredential;
 use crate::modules::workspace::{self, WorkspaceEnv};
 
 #[cfg(windows)]
@@ -54,16 +55,17 @@ pub fn build_command(
     workspace: WorkspaceEnv,
     blocks: bool,
     shell: Option<String>,
+    credential: Option<&SpawnCredential>,
 ) -> Result<CommandBuilder, String> {
     let shell = sanitize_shell_override(shell);
     #[cfg(unix)]
     {
-        let _ = workspace;
+        let _ = (workspace, credential);
         unix::build(cwd, blocks, shell)
     }
     #[cfg(windows)]
     {
-        windows::build(cwd, workspace, blocks, shell)
+        windows::build(cwd, workspace, blocks, shell, credential)
     }
 }
 
@@ -509,6 +511,7 @@ mod windows {
         workspace: WorkspaceEnv,
         blocks: bool,
         shell: Option<String>,
+        credential: Option<&super::SpawnCredential>,
     ) -> Result<CommandBuilder, String> {
         if let WorkspaceEnv::Wsl { distro } = workspace {
             let _ = (blocks, shell);
@@ -530,6 +533,11 @@ mod windows {
 
         let mut cmd = CommandBuilder::new(&shell_path);
         super::apply_common(&mut cmd, cwd, blocks);
+        if let Some(credential) = credential {
+            for (key, value) in credential.variables() {
+                cmd.env(key, value);
+            }
+        }
 
         if is_powershell {
             match prepare_ps_profile() {

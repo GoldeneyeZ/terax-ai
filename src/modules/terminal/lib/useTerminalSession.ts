@@ -52,6 +52,9 @@ type Callbacks = {
 };
 
 type Session = {
+  terminalId: string;
+  addressName: string | undefined;
+  private: boolean;
   pty: PtySession | null;
   ptyOpening: boolean;
   initialCwd: string | undefined;
@@ -425,6 +428,9 @@ configureRendererPool({
 
 function ensureSession(
   leafId: number,
+  terminalId: string,
+  addressName: string | undefined,
+  privateTerminal: boolean,
   initialCwd?: string,
   blocks = false,
 ): Session {
@@ -432,6 +438,9 @@ function ensureSession(
   if (existing) return existing;
 
   const session: Session = {
+    terminalId,
+    addressName,
+    private: privateTerminal,
     pty: null,
     ptyOpening: false,
     initialCwd,
@@ -542,6 +551,11 @@ async function openPtyForSession(
         if (s.callbacks.onExit) s.callbacks.onExit(code);
         else s.pendingExit = code;
       },
+    },
+    {
+      terminalId: s.terminalId,
+      addressName: s.addressName,
+      private: s.private,
     },
     cwd,
     s.blocks,
@@ -809,6 +823,9 @@ export function disposeSession(leafId: number): void {
 
 type Options = {
   leafId: number;
+  terminalId: string;
+  addressName?: string;
+  private: boolean;
   container: React.RefObject<HTMLDivElement | null>;
   visible: boolean;
   focused?: boolean;
@@ -821,6 +838,9 @@ type Options = {
 
 export function useTerminalSession({
   leafId,
+  terminalId,
+  addressName,
+  private: privateTerminal,
   container,
   visible,
   focused = true,
@@ -838,10 +858,18 @@ export function useTerminalSession({
   // would detach/rebind the renderer slot (disposing block markers) on each cd.
   const initialCwdRef = useRef(initialCwd);
   initialCwdRef.current = initialCwd;
+  const initialAddressNameRef = useRef(addressName);
 
   useEffect(() => {
     let cancelled = false;
-    const s = ensureSession(leafId, initialCwdRef.current, blocks);
+    const s = ensureSession(
+      leafId,
+      terminalId,
+      initialAddressNameRef.current,
+      privateTerminal,
+      initialCwdRef.current,
+      blocks,
+    );
     s.ready.then(() => {
       if (cancelled || s.disposed) return;
       const node = container.current;
@@ -857,19 +885,26 @@ export function useTerminalSession({
       cancelled = true;
       detachSession(leafId);
     };
-  }, [leafId, container, blocks]);
+  }, [leafId, terminalId, privateTerminal, container, blocks]);
 
   const [blockMode, setBlockMode] = useState<BlockMode>("prompt");
   useEffect(() => {
     if (!blocks) return;
-    const s = ensureSession(leafId, initialCwdRef.current, blocks);
+    const s = ensureSession(
+      leafId,
+      terminalId,
+      initialAddressNameRef.current,
+      privateTerminal,
+      initialCwdRef.current,
+      blocks,
+    );
     setBlockMode(s.blockMode);
     const cb = () => setBlockMode(sessions.get(leafId)?.blockMode ?? "prompt");
     s.blockListeners.add(cb);
     return () => {
       s.blockListeners.delete(cb);
     };
-  }, [leafId, blocks]);
+  }, [leafId, terminalId, privateTerminal, blocks]);
 
   const fontSize = usePreferencesStore((p) => p.terminalFontSize);
   const zoomLevel = usePreferencesStore((p) => p.zoomLevel);

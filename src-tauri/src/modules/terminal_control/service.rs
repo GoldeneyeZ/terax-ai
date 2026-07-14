@@ -6,6 +6,7 @@ use super::protocol::{
 use super::{Credentials, TokenBucket};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Condvar, Mutex,
@@ -18,6 +19,40 @@ use super::transport::windows::PipeServer;
 
 pub const PERSIST_NAME_EVENT: &str = "terminal-control://persist-name";
 const PERSIST_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Debug, Clone)]
+pub struct SpawnCredential {
+    terminal_id: String,
+    endpoint: String,
+    token: String,
+    path: String,
+}
+
+impl SpawnCredential {
+    fn new(terminal_id: &str, endpoint: &str, token: String, cli_dir: &Path) -> Self {
+        let inherited_path = std::env::var("PATH").unwrap_or_default();
+        let path = format!("{};{inherited_path}", cli_dir.display());
+        Self {
+            terminal_id: terminal_id.to_owned(),
+            endpoint: endpoint.to_owned(),
+            token,
+            path,
+        }
+    }
+
+    pub fn terminal_id(&self) -> &str {
+        &self.terminal_id
+    }
+
+    pub fn variables(&self) -> HashMap<String, String> {
+        HashMap::from([
+            ("TERAX_PANE_ID".into(), self.terminal_id.clone()),
+            ("TERAX_IPC_ENDPOINT".into(), self.endpoint.clone()),
+            ("TERAX_IPC_TOKEN".into(), self.token.clone()),
+            ("PATH".into(), self.path.clone()),
+        ])
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -179,6 +214,110 @@ impl TerminalControlState {
             .lock()
             .map_err(|_| ErrorCode::Internal)?
             .issue(terminal_id)
+    }
+
+    pub fn prepare_spawn(
+        &self,
+        terminal_id: &str,
+        address_name: Option<&str>,
+        private: bool,
+        workspace: &crate::modules::workspace::WorkspaceEnv,
+    ) -> Result<Option<SpawnCredential>, ErrorCode> {
+        if workspace.is_wsl() || !cfg!(windows) {
+            return Ok(None);
+        }
+        self.directory
+            .lock()
+            .map_err(|_| ErrorCode::Internal)?
+            .ensure_record(terminal_id, address_name, private)?;
+        let cli_dir = std::env::current_exe()
+            .map_err(|_| ErrorCode::Internal)?
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or(ErrorCode::Internal)?;
+        let token = Credentials::generate_token()?;
+        Ok(Some(SpawnCredential::new(
+            terminal_id,
+            &self.endpoint,
+            token,
+            &cli_dir,
+        )))
+    }
+
+    pub fn activate_spawn(
+        &self,
+        credential: &SpawnCredential,
+        pty_id: u32,
+    ) -> Result<(), ErrorCode> {
+        self.mark_live(credential.terminal_id(), pty_id)?;
+        match self.credentials.lock() {
+            Ok(mut credentials) => {
+                credentials.activate(credential.terminal_id(), &credential.token);
+                Ok(())
+            }
+            Err(_) => {
+                if let Ok(mut directory) = self.directory.lock() {
+                    let _ = directory.mark_spawn_failed(credential.terminal_id());
+                }
+                Err(ErrorCode::Internal)
+            }
+        }
+    }
+
+    pub fn abort_spawn(&self, terminal_id: &str) {
+        if let Ok(mut credentials) = self.credentials.lock() {
+            credentials.revoke_pane(terminal_id);
+        }
+        if let Ok(mut directory) = self.directory.lock() {
+            let _ = directory.mark_spawn_failed(terminal_id);
+        }
+    }
+
+    pub fn begin_close_by_pty(&self, pty_id: u32) -> Result<(), ErrorCode> {
+        let terminal_id = {
+            let mut directory = self.directory.lock().map_err(|_| ErrorCode::Internal)?;
+            let Some(record) = directory.record_by_pty(pty_id) else {
+                return Ok(());
+            };
+            directory.mark_closing(&record.terminal_id)?;
+            record.terminal_id
+        };
+        self.credentials
+            .lock()
+            .map_err(|_| ErrorCode::Internal)?
+            .revoke_pane(&terminal_id);
+        Ok(())
+    }
+
+    pub fn finish_close_by_pty(&self, pty_id: u32) -> Result<(), ErrorCode> {
+        let terminal_id = self
+            .directory
+            .lock()
+            .map_err(|_| ErrorCode::Internal)?
+            .record_by_pty(pty_id)
+            .map(|record| record.terminal_id);
+        let Some(terminal_id) = terminal_id else {
+            return Ok(());
+        };
+        self.credentials
+            .lock()
+            .map_err(|_| ErrorCode::Internal)?
+            .revoke_pane(&terminal_id);
+        if let Ok(mut limits) = self.rate_limits.lock() {
+            limits.remove(&terminal_id);
+        }
+        self.directory
+            .lock()
+            .map_err(|_| ErrorCode::Internal)?
+            .mark_exited(&terminal_id)
+    }
+
+    pub fn record_state(&self, terminal_id: &str) -> Option<RecordState> {
+        self.directory
+            .lock()
+            .ok()?
+            .record(terminal_id)
+            .map(|record| record.state)
     }
 
     pub fn mark_live(&self, terminal_id: &str, pty_id: u32) -> Result<(), ErrorCode> {

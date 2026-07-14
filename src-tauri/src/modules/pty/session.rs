@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use super::agent_detect::AgentDetector;
 use super::da_filter::DaFilter;
 use super::shell_init;
+use crate::modules::terminal_control::SpawnCredential;
 use crate::modules::workspace::WorkspaceEnv;
 
 const AGENT_EVENT: &str = "terax:agent-signal";
@@ -108,6 +109,7 @@ pub fn spawn(
     workspace: WorkspaceEnv,
     blocks: bool,
     shell: Option<String>,
+    credential: Option<SpawnCredential>,
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
 ) -> Result<(Arc<Session>, PtySize), String> {
@@ -123,7 +125,7 @@ pub fn spawn(
     };
     let pair = pty_system.openpty(size).map_err(|e| e.to_string())?;
 
-    let cmd = shell_init::build_command(cwd, workspace, blocks, shell)?;
+    let cmd = shell_init::build_command(cwd, workspace, blocks, shell, credential.as_ref())?;
     let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     drop(pair.slave);
 
@@ -304,8 +306,16 @@ pub fn spawn(
                 log::debug!("pty exit send failed (channel closed): {e}");
             }
             if let Some(state) = app_waiter.try_state::<super::PtyState>() {
+                let control = app_waiter
+                    .try_state::<crate::modules::terminal_control::TerminalControlState>();
+                if let Some(control) = control.as_ref() {
+                    let _ = control.begin_close_by_pty(id);
+                }
                 if let Some(s) = state.take(id) {
                     drop_session(s);
+                }
+                if let Some(control) = control.as_ref() {
+                    let _ = control.finish_close_by_pty(id);
                 }
             }
         })

@@ -294,6 +294,11 @@ pub fn run() {
                     app.try_state::<modules::terminal_control::TerminalControlState>()
                 {
                     state.shutdown();
+                    if let Some(pty) = app.try_state::<pty::PtyState>() {
+                        if let Err(error) = pty.close_all(&state) {
+                            log::debug!("PTY shutdown cleanup failed: {error}");
+                        }
+                    }
                 }
                 if let Some(state) = app.try_state::<lsp::LspState>() {
                     state.kill_all();

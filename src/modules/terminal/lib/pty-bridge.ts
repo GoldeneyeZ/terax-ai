@@ -1,11 +1,17 @@
-import { invoke, Channel } from "@tauri-apps/api/core";
 import { currentWorkspaceEnv } from "@/modules/workspace";
+import { Channel, invoke } from "@tauri-apps/api/core";
 
 const textEncoder = new TextEncoder();
 
 export type PtyHandlers = {
   onData: (bytes: Uint8Array) => void;
   onExit?: (code: number) => void;
+};
+
+export type PtyMetadata = {
+  terminalId: string;
+  addressName?: string;
+  private: boolean;
 };
 
 export type PtySession = {
@@ -19,6 +25,7 @@ export async function openPty(
   cols: number,
   rows: number,
   handlers: PtyHandlers,
+  metadata: PtyMetadata,
   cwd?: string,
   blocks?: boolean,
   shell?: string,
@@ -49,6 +56,9 @@ export async function openPty(
     workspace: currentWorkspaceEnv(),
     blocks: blocks ?? false,
     shell: shell ?? null,
+    terminalId: metadata.terminalId,
+    addressName: metadata.addressName ?? null,
+    private: metadata.private,
     onData,
     onExit,
   });

@@ -16,7 +16,7 @@ pub use protocol::{
 pub use rate_limit::TokenBucket;
 pub use service::{
     new_endpoint, CatalogRecord, Clock, ControlService, NamePersistence, PersistNameRequest,
-    PtySink, SystemClock, TerminalControlState, PERSIST_NAME_EVENT,
+    PtySink, SpawnCredential, SystemClock, TerminalControlState, PERSIST_NAME_EVENT,
 };
 
 #[tauri::command]

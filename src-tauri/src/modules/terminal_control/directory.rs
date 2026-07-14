@@ -36,6 +36,44 @@ pub struct TerminalDirectory {
 }
 
 impl TerminalDirectory {
+    pub fn ensure_record(
+        &mut self,
+        terminal_id: &str,
+        address_name: Option<&str>,
+        private: bool,
+    ) -> Result<(), ErrorCode> {
+        if terminal_id.is_empty() {
+            return Err(ErrorCode::InvalidRequest);
+        }
+        if self.records.contains_key(terminal_id) {
+            return Ok(());
+        }
+
+        let address_name = address_name.map(validate_name).transpose()?;
+        let conflicted = address_name
+            .as_ref()
+            .is_some_and(|name| self.names.contains_key(name));
+        let state = if conflicted {
+            RecordState::Conflicted
+        } else {
+            RecordState::Persisted
+        };
+        let record = TerminalRecord {
+            terminal_id: terminal_id.to_owned(),
+            address_name: address_name.clone(),
+            private,
+            state,
+            pty_id: None,
+        };
+        if !conflicted {
+            if let Some(name) = address_name {
+                self.names.insert(name, terminal_id.to_owned());
+            }
+        }
+        self.records.insert(terminal_id.to_owned(), record);
+        Ok(())
+    }
+
     pub fn sync_catalog(&mut self, records: Vec<TerminalRecord>) -> Result<(), ErrorCode> {
         let mut incoming = Vec::with_capacity(records.len());
         let mut terminal_ids = HashSet::with_capacity(records.len());
@@ -236,6 +274,25 @@ impl TerminalDirectory {
 
     pub fn record(&self, terminal_id: &str) -> Option<&TerminalRecord> {
         self.records.get(terminal_id)
+    }
+
+    pub fn record_by_pty(&self, pty_id: u32) -> Option<TerminalRecord> {
+        self.records
+            .values()
+            .find(|record| record.pty_id == Some(pty_id))
+            .cloned()
+    }
+
+    pub fn mark_spawn_failed(&mut self, terminal_id: &str) -> Result<(), ErrorCode> {
+        let record = self
+            .records
+            .get_mut(terminal_id)
+            .ok_or(ErrorCode::InvalidRequest)?;
+        record.pty_id = None;
+        if record.state != RecordState::Conflicted {
+            record.state = RecordState::Persisted;
+        }
+        Ok(())
     }
 
     pub fn source_name(&self, terminal_id: &str) -> Result<String, ErrorCode> {

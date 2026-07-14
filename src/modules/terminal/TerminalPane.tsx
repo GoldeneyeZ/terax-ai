@@ -25,6 +25,9 @@ export type TerminalPaneHandle = {
 type Props = {
   /** Stable identifier for this leaf (passed back through callbacks). */
   leafId: number;
+  terminalId: string;
+  addressName?: string;
+  private: boolean;
   /** Tab containing this pane is on screen. */
   visible: boolean;
   /** This leaf is the active pane within its tab — receives auto-focus. */
@@ -41,6 +44,9 @@ export const TerminalPane = memo(
   forwardRef<TerminalPaneHandle, Props>(function TerminalPane(
     {
       leafId,
+      terminalId,
+      addressName,
+      private: privateTerminal,
       visible,
       focused = true,
       initialCwd,
@@ -57,6 +63,9 @@ export const TerminalPane = memo(
 
     const session = useTerminalSession({
       leafId,
+      terminalId,
+      addressName,
+      private: privateTerminal,
       container: containerRef,
       visible,
       focused,

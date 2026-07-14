@@ -17,14 +17,22 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    pub fn issue(&mut self, terminal_id: &str) -> Result<String, ErrorCode> {
+    pub fn generate_token() -> Result<String, ErrorCode> {
         let mut random = [0_u8; TOKEN_BYTES];
         getrandom::fill(&mut random).map_err(|_| ErrorCode::Internal)?;
-        let token = URL_SAFE_NO_PAD.encode(random);
+        Ok(URL_SAFE_NO_PAD.encode(random))
+    }
+
+    pub fn activate(&mut self, terminal_id: &str, token: &str) {
         self.entries.push(CredentialEntry {
-            digest: token_digest(&token),
+            digest: token_digest(token),
             terminal_id: terminal_id.to_owned(),
         });
+    }
+
+    pub fn issue(&mut self, terminal_id: &str) -> Result<String, ErrorCode> {
+        let token = Self::generate_token()?;
+        self.activate(terminal_id, &token);
         Ok(token)
     }
 
