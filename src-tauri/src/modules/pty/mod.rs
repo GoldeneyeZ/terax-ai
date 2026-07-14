@@ -12,6 +12,7 @@ use std::thread;
 use portable_pty::PtySize;
 use tauri::ipc::{Channel, Response};
 
+use crate::modules::terminal_control::PtySink;
 use crate::modules::workspace::{user_spawn_cwd_or_home, WorkspaceEnv, WorkspaceRegistry};
 use session::Session;
 
@@ -34,6 +35,32 @@ impl Default for PtyState {
 impl PtyState {
     pub(super) fn take(&self, id: u32) -> Option<Arc<Session>> {
         self.sessions.write().unwrap().remove(&id)
+    }
+
+    pub fn write_bytes(&self, id: u32, bytes: &[u8]) -> Result<(), String> {
+        let session = self
+            .sessions
+            .read()
+            .unwrap()
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| "no session".to_string())?;
+        let result = session
+            .writer
+            .lock()
+            .unwrap()
+            .write_all(bytes)
+            .map_err(|error| {
+                log::debug!("pty write id={id} failed: {error}");
+                error.to_string()
+            });
+        result
+    }
+}
+
+impl PtySink for PtyState {
+    fn write(&self, pty_id: u32, bytes: &[u8]) -> Result<(), String> {
+        self.write_bytes(pty_id, bytes)
     }
 }
 
@@ -108,29 +135,7 @@ pub fn pty_write(
     let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
         return Err("pty_write: expected raw body".to_string());
     };
-    let session = state
-        .sessions
-        .read()
-        .unwrap()
-        .get(&id)
-        .cloned()
-        .ok_or_else(|| {
-            log::warn!("pty_write: unknown id={id}");
-            "no session".to_string()
-        })?;
-    // Bind to a local so the MutexGuard temporary drops before `session` —
-    // see rustc note on tail-expression temporary drop order.
-    let result = session
-        .writer
-        .lock()
-        .unwrap()
-        .write_all(bytes)
-        .map_err(|e| {
-            // EPIPE is expected if the child already exited.
-            log::debug!("pty_write id={id} failed: {e}");
-            e.to_string()
-        });
-    result
+    state.write_bytes(id, bytes)
 }
 
 #[tauri::command]

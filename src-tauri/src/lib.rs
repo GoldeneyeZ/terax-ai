@@ -154,12 +154,12 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
-        .setup(|_app| {
+        .setup(|app| {
             // macOS skips parent() for the settings window, so tie its lifecycle
             // to the main window here instead. Other platforms keep parent().
             #[cfg(target_os = "macos")]
-            if let Some(main) = _app.get_webview_window("main") {
-                let handle = _app.handle().clone();
+            if let Some(main) = app.get_webview_window("main") {
+                let handle = app.handle().clone();
                 main.on_window_event(move |event| {
                     if matches!(
                         event,
@@ -171,6 +171,17 @@ pub fn run() {
                     }
                 });
             }
+
+            let control =
+                modules::terminal_control::TerminalControlState::for_app(app.handle().clone())
+                    .map_err(std::io::Error::other)?;
+            if !app.manage(control) {
+                return Err(std::io::Error::other("terminal control state already managed").into());
+            }
+            #[cfg(windows)]
+            app.state::<modules::terminal_control::TerminalControlState>()
+                .start_pipe_server(app.handle().clone())
+                .map_err(std::io::Error::other)?;
             Ok(())
         })
         .manage(pty::PtyState::default())
@@ -270,6 +281,8 @@ pub fn run() {
             history::history_commands,
             history::history_record,
             history::history_list,
+            modules::terminal_control::terminal_control_sync_catalog,
+            modules::terminal_control::terminal_control_ack_name,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -277,6 +290,11 @@ pub fn run() {
             // Servers exit on stdin EOF, but destructors are not guaranteed
             // on process exit; kill explicitly.
             if let tauri::RunEvent::Exit = event {
+                if let Some(state) =
+                    app.try_state::<modules::terminal_control::TerminalControlState>()
+                {
+                    state.shutdown();
+                }
                 if let Some(state) = app.try_state::<lsp::LspState>() {
                     state.kill_all();
                 }
