@@ -1,6 +1,6 @@
 # Plan Progression
 
-Last updated: 2026-07-14 01:07
+Last updated: 2026-07-14 13:10
 
 ## Execution Policy
 
@@ -14,11 +14,11 @@ Last updated: 2026-07-14 01:07
 
 ## Goal Phases
 
-- Implementation: active
-- Spec review: unchecked
+- Implementation: complete
+- Spec review: failed
 - Code quality: unchecked
 - Integration review: unchecked
-- Next action: Implement TAM-6.
+- Next action: Repair the blocking spec-review findings, then rerun plan-wide spec review.
 
 ## Task 1: Persist stable terminal identities
 
