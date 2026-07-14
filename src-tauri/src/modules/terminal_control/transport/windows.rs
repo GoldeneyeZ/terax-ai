@@ -8,7 +8,7 @@ use std::ptr::{null, null_mut};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
     LocalFree, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, ERROR_SEM_TIMEOUT, GENERIC_READ,
@@ -353,22 +353,34 @@ fn create_pipe(
 
 fn open_client(endpoint: &str, timeout: Duration) -> io::Result<File> {
     let pipe_name = wide_null(endpoint)?;
-    if unsafe { WaitNamedPipeW(pipe_name.as_ptr(), timeout_millis(timeout)) } == 0 {
-        return Err(io::Error::last_os_error());
-    }
+    let started = Instant::now();
 
-    let handle = unsafe {
-        CreateFileW(
-            pipe_name.as_ptr(),
-            GENERIC_READ | GENERIC_WRITE,
-            0,
-            null(),
-            OPEN_EXISTING,
-            0,
-            null_mut(),
-        )
-    };
-    file_from_handle(handle)
+    loop {
+        let remaining = timeout.saturating_sub(started.elapsed());
+        if unsafe { WaitNamedPipeW(pipe_name.as_ptr(), timeout_millis(remaining)) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        let handle = unsafe {
+            CreateFileW(
+                pipe_name.as_ptr(),
+                GENERIC_READ | GENERIC_WRITE,
+                0,
+                null(),
+                OPEN_EXISTING,
+                0,
+                null_mut(),
+            )
+        };
+        if handle != INVALID_HANDLE_VALUE {
+            return file_from_handle(handle);
+        }
+
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() != Some(ERROR_PIPE_BUSY as i32) || started.elapsed() >= timeout {
+            return Err(error);
+        }
+    }
 }
 
 fn file_from_handle(handle: HANDLE) -> io::Result<File> {

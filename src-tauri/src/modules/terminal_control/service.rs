@@ -123,6 +123,7 @@ pub struct TerminalControlState {
     directory: Mutex<TerminalDirectory>,
     credentials: Mutex<Credentials>,
     rate_limits: Mutex<HashMap<String, TokenBucket>>,
+    target_writers: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     pending_names: Mutex<HashMap<String, Arc<PendingName>>>,
     hydrated: AtomicBool,
     shutdown: AtomicBool,
@@ -165,6 +166,7 @@ impl TerminalControlState {
             directory: Mutex::new(TerminalDirectory::default()),
             credentials: Mutex::new(Credentials::default()),
             rate_limits: Mutex::new(HashMap::new()),
+            target_writers: Mutex::new(HashMap::new()),
             pending_names: Mutex::new(HashMap::new()),
             hydrated: AtomicBool::new(false),
             shutdown: AtomicBool::new(false),
@@ -504,6 +506,27 @@ impl TerminalControlState {
             Err(_) => return (Err(ErrorCode::Internal), None),
         };
         let target_id = Some(target.terminal_id.clone());
+        let writer = match self.target_writers.lock() {
+            Ok(mut writers) => Arc::clone(
+                writers
+                    .entry(target.terminal_id.clone())
+                    .or_insert_with(|| Arc::new(Mutex::new(()))),
+            ),
+            Err(_) => return (Err(ErrorCode::Internal), target_id),
+        };
+        let _writer_guard = match writer.lock() {
+            Ok(guard) => guard,
+            Err(_) => return (Err(ErrorCode::Internal), target_id),
+        };
+        let target = match self.directory.lock() {
+            Ok(directory) => match directory.record(&target.terminal_id) {
+                Some(record) if record.state == RecordState::Live && record.pty_id.is_some() => {
+                    record.clone()
+                }
+                _ => return (Err(ErrorCode::TargetNotLive), target_id),
+            },
+            Err(_) => return (Err(ErrorCode::Internal), target_id),
+        };
         let result = build_envelope(&source_name, message)
             .and_then(|envelope| {
                 self.pty
