@@ -1,21 +1,28 @@
 # Plan-wide Spec Review
 
-Result: failed
+Result: checked
 
-Reviewed implementation range: `9a967322^..d78735c`
+Reviewed implementation range: `9a967322^..de4ecf3`
 
-## Blocking findings
+Working-tree scope: no tracked implementation changes after `de4ecf3`; the user-owned untracked `docs/architecture/terax-architecture-report.md` was excluded and untouched.
 
-1. The frontend does not surface the required duplicate-catalog repair warning.
+## Repair verification
 
-   The approved design requires corrupt persisted layouts with colliding canonical names to leave every collision unaddressable and to display a repair warning (`docs/superfastpowers/specs/2026-07-13-terminal-agent-messaging-design.md:92`, `:140`). The Rust directory correctly marks all collisions conflicted, but `collectTerminalCatalog` forwards the catalog without detecting collisions (`src/modules/terminal/lib/terminalControl.ts:36`) and the bridge only reports synchronization failure to the console (`src/modules/terminal/lib/useTerminalControlBridge.ts:50`). No visible repair warning is produced.
+1. Duplicate persisted names now produce the required visible repair warning.
 
-2. Catalog terminal IDs are not validated as UUIDs in Rust.
+   The approved design requires every canonical name collision to remain unaddressable and the frontend to surface a repair warning (`docs/superfastpowers/specs/2026-07-13-terminal-agent-messaging-design.md:92`, `:140`). `findDuplicateCatalogNames` canonicalizes, counts, and deterministically sorts all collisions (`src/modules/terminal/lib/terminalControl.ts:51`). The bridge derives that collision set from the complete catalog and emits a deduplicated Sonner warning that identifies the names and tells the user to rename the affected panes (`src/modules/terminal/lib/useTerminalControlBridge.ts:53`). The regression test covers case-insensitive collisions, private records, multiple duplicate groups, and unnamed records (`src/modules/terminal/lib/terminalControl.test.ts:92`). Existing Rust directory behavior continues to mark every colliding record conflicted and mask it from discovery and targeting.
 
-   The approved boot contract says Rust validates UUIDs and names before accepting CLI traffic (`docs/superfastpowers/specs/2026-07-13-terminal-agent-messaging-design.md:90`). `TerminalDirectory::sync_catalog` rejects only empty or repeated IDs (`src-tauri/src/modules/terminal_control/directory.rs:77`), so arbitrary non-empty strings are accepted.
+2. Rust now rejects non-UUID catalog terminal IDs before directory mutation.
 
-## Required repair
+   The boot contract requires Rust to validate UUIDs and names before accepting CLI traffic (`docs/superfastpowers/specs/2026-07-13-terminal-agent-messaging-design.md:90`). `validate_catalog_ids` parses every incoming ID with `uuid::Uuid::parse_str`, and `terminal_control_sync_catalog` invokes it before calling state synchronization (`src-tauri/src/modules/terminal_control/mod.rs:23`, `:35`). The focused regression test proves a UUID is accepted and `pane-a` is rejected with `INVALID_REQUEST` (`src-tauri/src/modules/terminal_control/mod.rs:58`). Because validation precedes `state.sync_catalog`, invalid input cannot partially replace the directory.
 
-- Detect duplicated canonical terminal names in the frontend catalog and show a stable, visible warning that tells the user to rename the affected panes.
-- Reject non-UUID terminal IDs during Rust catalog synchronization without partially mutating the directory.
-- Add focused regression tests for both behaviors, then rerun plan-wide spec review.
+## Coverage and evidence
+
+- Re-inspected the approved design, master plan, all TAM task/context packages, the complete implementation range, repair diff, and post-repair working tree. No remaining missing, extra, misunderstood, or regressed blocking requirement was found.
+- `pnpm test -- src/modules/terminal/lib/terminalControl.test.ts`: PASS, 1 file and 7 tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked catalog_ids_must_be_uuids --lib`: PASS, 1 executed test.
+- Task contexts record the broader frontend, Rust, packaging, and production-build gates; this re-review independently inspected the repaired source and reran the two focused regressions rather than treating context files as proof.
+
+## Decision
+
+The plan-wide specification phase is checked. The implementation satisfies the approved Terminal Agent Messaging design and may proceed to the policy-declared plan-wide code-quality phase.

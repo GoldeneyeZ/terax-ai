@@ -1,6 +1,6 @@
 # Plan Progression
 
-Last updated: 2026-07-14 13:10
+Last updated: 2026-07-14 12:45
 
 ## Execution Policy
 
@@ -15,10 +15,10 @@ Last updated: 2026-07-14 13:10
 ## Goal Phases
 
 - Implementation: complete
-- Spec review: failed
+- Spec review: checked
 - Code quality: unchecked
 - Integration review: unchecked
-- Next action: Repair the blocking spec-review findings, then rerun plan-wide spec review.
+- Next action: Perform plan-wide code-quality review.
 
 ## Task 1: Persist stable terminal identities
 
