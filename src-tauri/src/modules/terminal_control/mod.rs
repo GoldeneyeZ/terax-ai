@@ -1,7 +1,9 @@
 pub mod credentials;
 pub mod directory;
+pub mod framing;
 pub mod protocol;
 pub mod rate_limit;
+pub mod transport;
 
 pub use credentials::Credentials;
 pub use directory::{NameReservation, RecordState, TerminalDirectory, TerminalRecord};
