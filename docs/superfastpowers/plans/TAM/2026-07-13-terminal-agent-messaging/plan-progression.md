@@ -1,6 +1,6 @@
 # Plan Progression
 
-Last updated: 2026-07-14 12:45
+Last updated: 2026-07-14 12:49
 
 ## Execution Policy
 
@@ -16,9 +16,9 @@ Last updated: 2026-07-14 12:45
 
 - Implementation: complete
 - Spec review: checked
-- Code quality: unchecked
+- Code quality: checked-with-minor-notes
 - Integration review: unchecked
-- Next action: Perform plan-wide code-quality review.
+- Next action: Perform plan-wide integration review.
 
 ## Task 1: Persist stable terminal identities
 
