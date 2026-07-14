@@ -47,8 +47,8 @@ Last updated: 2026-07-14 01:07
 ## Task 5: Synchronize frontend catalog and durable name changes
 
 - Path: `docs/superfastpowers/plans/TAM/2026-07-13-terminal-agent-messaging/tasks/TAM-5/`
-- Status: pending
-- Next action: Start implementation.
+- Status: implemented
+- Next action: Await plan-scoped reviews after all tasks are implemented.
 
 ## Task 6: Bind pane identity, credentials, and PTY lifecycle
 
